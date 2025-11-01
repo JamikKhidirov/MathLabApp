@@ -1,0 +1,137 @@
+package com.example.mathlab.view.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.domain.data.MathItemData
+import com.example.mathlab.R
+import com.example.mathlab.view.components.ItemMath
+import com.example.mathlab.view.components.TopBarMathLab
+
+
+@Composable
+@Preview
+fun MathLabMainScreen(){
+    val items: List<MathItemData> = listOf(
+        MathItemData(
+            icon = R.drawable.algebra,
+            title = "Алгебра",
+            description = "Тренируйте свою логику"
+        ),
+        MathItemData(
+            icon = R.drawable.geometry,
+            title = "Геометрия",
+            description = "Визуализируйте формы"
+        ),
+        MathItemData(
+            icon = R.drawable.trigonometry,
+            title = "Тригонометрия",
+            description = "Исследуйте углы обзора"
+        ),
+        MathItemData(
+            icon = R.drawable.combinatrics,
+            title = "Комбинаторика",
+            description = "Мастер подсчета голосов"
+        )
+    )
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize()
+        .background(colorResource(R.color.backGroundColorMain)),
+        topBar = {
+            TopBarMathLab(
+               backStack = false
+            ) {
+
+            }
+        }
+
+    ) { paddingValues ->
+        BottomScreenMain(
+            paddingValues = paddingValues,
+            items = items
+        )
+    }
+}
+
+
+
+@Composable
+fun BottomScreenMain(
+    paddingValues: PaddingValues,
+    items: List<MathItemData>
+){
+    Column(
+        modifier = Modifier.fillMaxSize()
+            .padding(paddingValues)
+            .background(colorResource(R.color.backGroundColorMain))
+
+    ) {
+        Text(
+            text = "Добро пожаловать!",
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(top = 44.dp)
+                .fillMaxWidth()
+                .wrapContentWidth(Alignment.CenterHorizontally),
+            fontSize = 28.sp
+        )
+
+        Text(
+            text = "Выберите тему для начала",
+            modifier = Modifier.fillMaxWidth()
+                .wrapContentWidth(Alignment.CenterHorizontally)
+                .padding(top = 10.dp),
+            color = colorResource(R.color.textcolorTheme),
+            fontSize = 18.sp
+        )
+
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 13.dp)
+                .padding(top = 20.dp)
+                .statusBarsPadding()
+                .background(colorResource(R.color.backGroundColorMain)),
+            horizontalArrangement = Arrangement
+                .spacedBy(13.dp),
+            verticalArrangement = Arrangement.spacedBy(13.dp)
+        ) {
+            items(items){ item ->
+                ItemMath(
+                    modifier = Modifier,
+                    icon = item.icon,
+                    textMath = item.title,
+                    textDescriptionMath = item.description,
+                    onClickItem = {
+
+                    }
+
+                )
+            }
+        }
+    }
+}
+
