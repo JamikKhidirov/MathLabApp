@@ -36,10 +36,10 @@ import com.example.mathlab.R
 @Composable
 fun ItemMath(
     modifier: Modifier = Modifier,
-    icon: Int? = null,
+    icon: Int? = R.drawable.geometry,
     textMath: String = "Алгебра",
     textDescriptionMath: String = "Тренируйте свою логику",
-    onClickItem: () -> Unit
+    onClickItem: (String) -> Unit = {}
 ){
     Card(
         modifier = Modifier.width(120.dp)
@@ -52,7 +52,9 @@ fun ItemMath(
             defaultElevation = 2.dp,
             pressedElevation = 0.dp
         ),
-        onClick = onClickItem
+        onClick = {
+            onClickItem(textMath)
+        }
     ) {
         Column(
             modifier = Modifier

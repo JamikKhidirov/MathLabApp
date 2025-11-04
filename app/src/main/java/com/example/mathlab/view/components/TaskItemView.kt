@@ -46,7 +46,9 @@ fun TaskItemView(
     Row (
         modifier = Modifier.fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(colorResource(R.color.colorBackItem))
+            .background(
+                colorResource(R.color.colorBackItem)
+            )
             .clickable{
                 onClick()
             },

@@ -71,7 +71,10 @@ fun MathLabMainScreen(){
     ) { paddingValues ->
         BottomScreenMain(
             paddingValues = paddingValues,
-            items = items
+            items = items,
+            onClickItemData = { textMath: String ->
+
+            }
         )
     }
 }
@@ -81,7 +84,8 @@ fun MathLabMainScreen(){
 @Composable
 fun BottomScreenMain(
     paddingValues: PaddingValues,
-    items: List<MathItemData>
+    items: List<MathItemData>,
+    onClickItemData: (textMath: String) -> Unit
 ){
     Column(
         modifier = Modifier.fillMaxSize()
@@ -125,10 +129,7 @@ fun BottomScreenMain(
                     icon = item.icon,
                     textMath = item.title,
                     textDescriptionMath = item.description,
-                    onClickItem = {
-
-                    }
-
+                    onClickItem = onClickItemData
                 )
             }
         }
