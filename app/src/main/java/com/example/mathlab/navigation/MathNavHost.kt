@@ -46,7 +46,9 @@ internal fun MathNavHost(){
         ) {
             MathLabMainScreen {category ->
                 val navroute = NavRouteDecisionScreen(category = category)
-                navController.navigate(navroute)
+                navController.navigate(navroute){
+                    launchSingleTop = true
+                }
             }
         }
 

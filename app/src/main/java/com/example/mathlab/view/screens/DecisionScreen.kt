@@ -185,15 +185,15 @@ fun BottomDecisionScreen(
                 Icon(
                     imageVector = Icons.Default.Lightbulb,
                     contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    modifier = Modifier.size(44.dp),
+                    tint = colorResource(R.color.iconColor)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = "Решатель задач",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = colorResource(R.color.iconColor)
                 )
                 Text(
                     text = "Тема: ${category.displayName()}",
