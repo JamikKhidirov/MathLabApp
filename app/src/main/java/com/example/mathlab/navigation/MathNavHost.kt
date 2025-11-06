@@ -29,19 +29,19 @@ internal fun MathNavHost(){
             enterTransition = {
                 // При входе на экран (A -> B), B скользит слева направо (Pop)
                 // Обычный вход (первый запуск или переход, не связанный с Pop)
-                fadeIn(animationSpec = tween(400)) // Используем только простой fadeIn
+                fadeIn(animationSpec = tween(600)) // Используем только простой fadeIn
             },
             exitTransition = {
                 // При выходе с экрана (A -> B), A скользит справа налево
-                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(600))
             },
             popEnterTransition = {
                 // При возврате на этот экран (B -> A), A скользит слева направо
-                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(600))
             },
             popExitTransition = {
                 // При возврате на этот экран (B -> A), B скользит справа налево (Pop)
-                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(600))
             }
         ) {
             MathLabMainScreen {category ->
@@ -56,19 +56,19 @@ internal fun MathNavHost(){
         composable<NavRouteDecisionScreen>(
             enterTransition = {
                 // При входе на экран (A -> B), B скользит справа налево
-                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(600))
             },
             exitTransition = {
                 // При выходе с экрана (A -> B), A скользит слева направо (Pop)
-                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(600))
             },
             popEnterTransition = {
                 // При возврате на этот экран (B -> A), B скользит справа налево (Pop)
-                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(400))
+                slideIntoContainer(AnimatedContentTransitionScope.SlideDirection.Start, tween(600))
             },
             popExitTransition = {
                 // При возврате на этот экран (B -> A), A скользит справа налево
-                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(400))
+                slideOutOfContainer(AnimatedContentTransitionScope.SlideDirection.End, tween(600))
             }
         ) {
             val category = it.toRoute<NavRouteDecisionScreen>()
