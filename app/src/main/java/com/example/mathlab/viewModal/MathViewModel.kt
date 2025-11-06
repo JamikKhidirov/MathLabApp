@@ -37,7 +37,7 @@ class MathViewModel @Inject constructor(
                 val problem = MathProblem(
                     expression = expression.trim(),
                     category = category,
-                    variable = "x" // или можно определить из выражения
+                    variable = "x"
                 )
                 _result.value = solveMathProblem(problem)
             } catch (e: Exception) {
@@ -46,5 +46,10 @@ class MathViewModel @Inject constructor(
                 _isLoading.value = false
             }
         }
+    }
+
+    // Новый метод для очистки результата
+    fun clearResult() {
+        _result.value = ""
     }
 }

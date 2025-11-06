@@ -21,7 +21,7 @@ fun MathCategory.displayName(): String = when (this) {
 
 
 // Вспомогательные функции
-private fun getPlaceholderForCategory(category: MathCategory): String {
+fun getPlaceholderForCategory(category: MathCategory): String {
     return when (category) {
         MathCategory.ALGEBRA -> "x^2 - 5*x + 6 = 0"
         MathCategory.GEOMETRY -> "area circle 5"
@@ -30,7 +30,7 @@ private fun getPlaceholderForCategory(category: MathCategory): String {
     }
 }
 
-private fun getHintForCategory(category: MathCategory): String {
+fun getHintForCategory(category: MathCategory): String {
     return when (category) {
         MathCategory.ALGEBRA -> "Используйте x как переменную. Пример: 2*x + 3 = 7"
         MathCategory.GEOMETRY -> "Используйте: area/volume/perimeter circle/triangle/rectangle"
@@ -39,7 +39,7 @@ private fun getHintForCategory(category: MathCategory): String {
     }
 }
 
-private fun getFormatExamples(category: MathCategory): String {
+fun getFormatExamples(category: MathCategory): String {
     return when (category) {
         MathCategory.ALGEBRA -> "• x^2 - 5x + 6 = 0\n• 2x + 3 = 7\n• x^3 - 2x - 5 = 0"
         MathCategory.GEOMETRY -> "• area circle 5\n• volume sphere 3\n• perimeter rectangle 4 6"

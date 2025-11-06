@@ -23,11 +23,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Calculate
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Lightbulb
@@ -51,6 +53,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,15 +63,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.domain.data.stateMathlabCategory.MathCategory
 import com.example.domain.data.stateMathlabCategory.displayName
+import com.example.domain.data.stateMathlabCategory.getFormatExamples
+import com.example.domain.data.stateMathlabCategory.getHintForCategory
+import com.example.domain.data.stateMathlabCategory.getPlaceholderForCategory
 import com.example.mathlab.R
 import com.example.mathlab.view.components.TopBarMathLab
 import com.example.mathlab.view.components.decisionScreen.BottomBar
@@ -90,13 +98,45 @@ fun DecisionScreen(
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
 
+    // Правильное определение успешного решения
+    val isSuccessfullySolved = remember(result) {
+        result.isNotBlank() &&
+                !result.startsWith("Ошибка:") &&
+                !result.startsWith("❌") &&
+                !result.startsWith("Неверный формат") &&
+                !result.startsWith("📊 Решение системы уравнений:") && // Информационные сообщения
+                !result.startsWith("📐 Формулы") && // Справочная информация
+                !result.startsWith("📐 Тригонометрический калькулятор:") &&
+                !result.startsWith("📐 Геометрический калькулятор:") &&
+                !result.startsWith("📊 Комбинаторика:") &&
+                !result.startsWith("📊 Численное решение:") && // Информация о методе
+                !result.contains("Используйте:") && // Подсказки по формату
+                !result.contains("Доступные команды:") && // Списки команд
+                !result.contains("Пример:") && // Примеры
+                expression.isNotBlank() &&
+                result.contains(Regex("""[=≈:]\s*[-+]?\d*\.?\d+""")) // Содержит численный ответ
+    }
+
+    val shouldShowResult = remember { derivedStateOf {
+        result.isNotBlank() && expression.isNotBlank()
+    } }
+
+    val isError = result.startsWith("Ошибка:") || result.startsWith("❌")
+
     // Показываем snackbar при ошибках
     LaunchedEffect(result) {
-        if (result.startsWith("Ошибка:")) {
+        if (isError) {
             snackbarHostState.showSnackbar(
                 message = "Не удалось решить задачу",
                 duration = SnackbarDuration.Short
             )
+        }
+    }
+
+    // Сбрасываем результат при очистке поля ввода
+    LaunchedEffect(expression) {
+        if (expression.isBlank() && result.isNotBlank()) {
+            viewModel.clearResult()
         }
     }
 
@@ -110,7 +150,6 @@ fun DecisionScreen(
                 onBackIconClick = onBackIconTopAppBarClick
             )
         },
-
     ) { paddingValues ->
         BottomDecisionScreen(
             paddingValues = paddingValues,
@@ -118,6 +157,9 @@ fun DecisionScreen(
             expression = expression,
             isLoading = isLoading,
             result = result,
+            shouldShowResult = shouldShowResult.value,
+            isSuccessfullySolved = isSuccessfullySolved,
+            isError = isError,
             onNewFildText = { newString ->
                 expression = newString
             },
@@ -153,12 +195,14 @@ fun BottomDecisionScreen(
     expression: String,
     isLoading: Boolean,
     result: String,
+    shouldShowResult: Boolean,
+    isSuccessfullySolved: Boolean,
+    isError: Boolean,
     onNewFildText: (String) -> Unit,
     onSolveClick: () -> Unit,
     onCopyResult: () -> Unit
 ) {
     val scrollState = rememberScrollState()
-    val isError = result.startsWith("Ошибка:")
 
     Column(
         modifier = Modifier
@@ -206,7 +250,10 @@ fun BottomDecisionScreen(
         // Поле ввода
         Card(
             modifier = Modifier.fillMaxWidth(),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = colorResource(R.color.colorBackItem)
+            )
         ) {
             Column(
                 modifier = Modifier
@@ -216,6 +263,7 @@ fun BottomDecisionScreen(
                 Text(
                     text = "Введите математическое выражение:",
                     style = MaterialTheme.typography.titleMedium,
+                    fontSize = 18.sp,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(12.dp))
@@ -272,7 +320,7 @@ fun BottomDecisionScreen(
                     .fillMaxWidth()
                     .height(56.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
+                    containerColor = colorResource(R.color.iconColor),
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 enabled = !isLoading && expression.isNotBlank()
@@ -326,11 +374,13 @@ fun BottomDecisionScreen(
 
         // Блок с результатом
         AnimatedVisibility(
-            visible = result.isNotBlank(),
+            visible = shouldShowResult,
             enter = slideInVertically(
                 animationSpec = tween(durationMillis = 500)
             ) + fadeIn(),
-            exit = slideOutVertically() + fadeOut()
+            exit = slideOutVertically(
+                animationSpec = tween(durationMillis = 300)
+            ) + fadeOut()
         ) {
             Card(
                 modifier = Modifier
@@ -344,7 +394,7 @@ fun BottomDecisionScreen(
                     containerColor = if (isError) {
                         MaterialTheme.colorScheme.errorContainer
                     } else {
-                        MaterialTheme.colorScheme.primaryContainer
+                        colorResource(R.color.colorBackItem)
                     }
                 ),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -367,7 +417,7 @@ fun BottomDecisionScreen(
                             color = if (isError) {
                                 MaterialTheme.colorScheme.error
                             } else {
-                                MaterialTheme.colorScheme.primary
+                                colorResource(R.color.black)
                             }
                         )
 
@@ -381,7 +431,7 @@ fun BottomDecisionScreen(
                                 tint = if (isError) {
                                     MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
                                 } else {
-                                    MaterialTheme.colorScheme.primary
+                                    colorResource(R.color.black)
                                 }
                             )
                         }
@@ -399,7 +449,7 @@ fun BottomDecisionScreen(
                                 if (isError) {
                                     MaterialTheme.colorScheme.error
                                 } else {
-                                    MaterialTheme.colorScheme.primary
+                                    colorResource(R.color.colorBackItem)
                                 }
                             ),
                         contentAlignment = Alignment.Center
@@ -407,11 +457,11 @@ fun BottomDecisionScreen(
                         Icon(
                             imageVector = if (isError) Icons.Default.Error else Icons.Default.Calculate,
                             contentDescription = null,
-                            modifier = Modifier.size(24.dp),
+                            modifier = Modifier.size(44.dp),
                             tint = if (isError) {
                                 MaterialTheme.colorScheme.onError
                             } else {
-                                MaterialTheme.colorScheme.onPrimary
+                                colorResource(R.color.iconColor)
                             }
                         )
                     }
@@ -420,32 +470,58 @@ fun BottomDecisionScreen(
 
                     // Текст результата
                     Text(
-                        text = if (isError) result.substringAfter("Ошибка:") else result,
+                        text = if (isError) {
+                            result.substringAfter("Ошибка:").substringAfter("❌").trim()
+                        } else {
+                            result
+                        },
                         style = MaterialTheme.typography.bodyLarge,
                         color = if (isError) {
                             MaterialTheme.colorScheme.onErrorContainer
                         } else {
-                            MaterialTheme.colorScheme.onPrimaryContainer
+                            colorResource(R.color.black)
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Start
                     )
 
                     // Дополнительная информация для успешных результатов
                     AnimatedVisibility(
-                        visible = !isError && result.isNotBlank(),
+                        visible = isSuccessfullySolved,
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically()
                     ) {
                         Column {
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Задача успешно решена!",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Center
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        colorResource(R.color.iconColor).copy(alpha = 0.1f),
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(12.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CheckCircle,
+                                        contentDescription = null,
+                                        tint = colorResource(R.color.iconColor),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Задача успешно решена!",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = colorResource(R.color.iconColor),
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -453,11 +529,18 @@ fun BottomDecisionScreen(
         }
 
         // Подсказки по формату ввода
-        if (expression.isBlank()) {
+        AnimatedVisibility(
+            visible = expression.isBlank(),
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically()
+        ) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    containerColor = colorResource(R.color.colorBackItem)
+                ),
+                elevation = CardDefaults.cardElevation(
+                    defaultElevation = 4.dp
                 )
             ) {
                 Column(
@@ -468,11 +551,13 @@ fun BottomDecisionScreen(
                     Text(
                         text = "💡 Подсказки по формату:",
                         style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 18.sp
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                     Text(
                         text = getFormatExamples(category),
+                        fontSize = 16.sp,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -482,37 +567,9 @@ fun BottomDecisionScreen(
     }
 
     // Автоскролл к результату
-    LaunchedEffect(result) {
-        if (result.isNotBlank()) {
+    LaunchedEffect(shouldShowResult) {
+        if (shouldShowResult) {
             scrollState.animateScrollTo(scrollState.maxValue)
         }
-    }
-}
-
-// Вспомогательные функции для UI
-private fun getPlaceholderForCategory(category: MathCategory): String {
-    return when (category) {
-        MathCategory.ALGEBRA -> "x^2 - 5*x + 6 = 0"
-        MathCategory.GEOMETRY -> "area circle 5"
-        MathCategory.TRIGONOMETRY -> "sin(30)"
-        MathCategory.COMBINATORICS -> "factorial 5"
-    }
-}
-
-private fun getHintForCategory(category: MathCategory): String {
-    return when (category) {
-        MathCategory.ALGEBRA -> "Используйте x как переменную. Пример: 2*x + 3 = 7"
-        MathCategory.GEOMETRY -> "Используйте: area/volume/perimeter circle/triangle/rectangle"
-        MathCategory.TRIGONOMETRY -> "sin/cos/tan(угол), angle значение, identity для тождеств"
-        MathCategory.COMBINATORICS -> "factorial n, combination n k, permutation n k"
-    }
-}
-
-private fun getFormatExamples(category: MathCategory): String {
-    return when (category) {
-        MathCategory.ALGEBRA -> "• x^2 - 5x + 6 = 0\n• 2x + 3 = 7\n• x^3 - 2x - 5 = 0"
-        MathCategory.GEOMETRY -> "• area circle 5\n• volume sphere 3\n• perimeter rectangle 4 6"
-        MathCategory.TRIGONOMETRY -> "• sin(30)\n• cos(45)\n• trig identity\n• angle 60"
-        MathCategory.COMBINATORICS -> "• factorial 5\n• combination 10 3\n• permutation 5 2"
     }
 }
