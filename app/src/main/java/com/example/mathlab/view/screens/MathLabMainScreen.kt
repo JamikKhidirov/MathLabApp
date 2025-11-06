@@ -26,6 +26,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.domain.data.MathItemData
+import com.example.domain.data.stateMathlabCategory.MathCategory
 import com.example.mathlab.R
 import com.example.mathlab.view.components.ItemMath
 import com.example.mathlab.view.components.TopBarMathLab
@@ -33,27 +34,34 @@ import com.example.mathlab.view.components.TopBarMathLab
 
 @Composable
 @Preview
-fun MathLabMainScreen(){
+fun MathLabMainScreen(
+    backStack: Boolean = false,
+    onCategoryClick: (MathCategory) -> Unit = {}
+){
     val items: List<MathItemData> = listOf(
         MathItemData(
             icon = R.drawable.algebra,
             title = "Алгебра",
-            description = "Тренируйте свою логику"
+            description = "Тренируйте свою логику",
+            MathCategory.ALGEBRA
         ),
         MathItemData(
             icon = R.drawable.geometry,
             title = "Геометрия",
-            description = "Визуализируйте формы"
+            description = "Визуализируйте формы",
+            MathCategory.GEOMETRY
         ),
         MathItemData(
             icon = R.drawable.trigonometry,
             title = "Тригонометрия",
-            description = "Исследуйте углы обзора"
+            description = "Исследуйте углы обзора",
+            MathCategory.TRIGONOMETRY
         ),
         MathItemData(
             icon = R.drawable.combinatrics,
             title = "Комбинаторика",
-            description = "Мастер подсчета голосов"
+            description = "Мастер подсчета голосов",
+            MathCategory.COMBINATORICS
         )
     )
 
@@ -62,7 +70,7 @@ fun MathLabMainScreen(){
         .background(colorResource(R.color.backGroundColorMain)),
         topBar = {
             TopBarMathLab(
-               backStack = false
+               backStack = backStack
             ) {
 
             }
@@ -72,8 +80,8 @@ fun MathLabMainScreen(){
         BottomScreenMain(
             paddingValues = paddingValues,
             items = items,
-            onClickItemData = { textMath: String ->
-
+            onClickItemData = { mathItem: MathItemData ->
+                onCategoryClick(mathItem.category)
             }
         )
     }
@@ -85,7 +93,7 @@ fun MathLabMainScreen(){
 fun BottomScreenMain(
     paddingValues: PaddingValues,
     items: List<MathItemData>,
-    onClickItemData: (textMath: String) -> Unit
+    onClickItemData: (MathItemData) -> Unit
 ){
     Column(
         modifier = Modifier.fillMaxSize()
@@ -129,6 +137,7 @@ fun BottomScreenMain(
                     icon = item.icon,
                     textMath = item.title,
                     textDescriptionMath = item.description,
+                    category = item.category,
                     onClickItem = onClickItemData
                 )
             }

@@ -30,6 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.domain.data.MathItemData
+import com.example.domain.data.stateMathlabCategory.MathCategory
 import com.example.mathlab.R
 
 
@@ -39,7 +41,8 @@ fun ItemMath(
     icon: Int? = R.drawable.geometry,
     textMath: String = "Алгебра",
     textDescriptionMath: String = "Тренируйте свою логику",
-    onClickItem: (String) -> Unit = {}
+    category: MathCategory,
+    onClickItem: (MathItemData) -> Unit = {}
 ){
     Card(
         modifier = Modifier.width(120.dp)
@@ -53,7 +56,15 @@ fun ItemMath(
             pressedElevation = 0.dp
         ),
         onClick = {
-            onClickItem(textMath)
+            val item = MathItemData(
+                icon = icon,
+                title = textMath,
+                description = textDescriptionMath,
+                category = category
+            )
+
+            onClickItem(item)
+
         }
     ) {
         Column(
