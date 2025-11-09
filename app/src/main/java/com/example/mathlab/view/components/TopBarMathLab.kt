@@ -31,6 +31,7 @@ import com.example.mathlab.R
 fun TopBarMathLab(
     modifier: Modifier = Modifier,
     textTitle: String = "MathLab",
+    letterDelayMillis: Long = 65L,
     backStack: Boolean = true,
     onBackIconClick: () -> Unit = {}
     ){
@@ -41,17 +42,14 @@ fun TopBarMathLab(
             containerColor = colorResource(R.color.colorBackItem)
         ),
         title = {
-            Box(modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ){
-                TypeAnimationText(
-                    text = textTitle,
-                    modifier = Modifier,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = colorResource(R.color.black)
-                )
-            }
+            TypeAnimationText(
+                text = textTitle,
+                modifier = Modifier.padding(end = if (backStack) 20.dp else 0.dp),
+                fontSize = 22.sp,
+                fontWeight = FontWeight.Bold,
+                color = colorResource(R.color.black),
+                letterDelayMillis = letterDelayMillis
+            )
         },
         navigationIcon = {
             if (backStack){

@@ -32,6 +32,7 @@ import com.example.domain.data.stateMathlabCategory.MathCategory
 import com.example.mathlab.R
 import com.example.mathlab.view.components.ItemMath
 import com.example.mathlab.view.components.TopBarMathLab
+import com.example.mathlab.view.components.TypeAnimationText
 import kotlin.text.category
 
 
@@ -117,7 +118,7 @@ fun BottomScreenMain(
 
 
         item(span = {GridItemSpan(maxLineSpan) }){
-            Text(
+            TypeAnimationText(
                 text = "Добро пожаловать!",
                 color = colorResource(R.color.iconColor),
                 fontWeight = FontWeight.Bold,
