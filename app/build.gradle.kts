@@ -32,6 +32,15 @@ android {
             )
         }
 
+        getByName("release"){
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+        }
+
     }
 
     packaging {
@@ -82,6 +91,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
 
     implementation("androidx.compose.material:material-icons-extended:1.5.0")
+
+    implementation("androidx.core:core-splashscreen:1.2.0")
 
     
     implementation(libs.androidx.core.ktx)

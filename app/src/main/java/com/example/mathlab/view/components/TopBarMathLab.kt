@@ -21,6 +21,7 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.mathlab.R
 
 
@@ -43,11 +44,12 @@ fun TopBarMathLab(
             Box(modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ){
-                Text(
+                TypeAnimationText(
                     text = textTitle,
+                    modifier = Modifier,
+                    fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier
-                        .padding(end = 32.dp)
+                    color = colorResource(R.color.black)
                 )
             }
         },
