@@ -1,5 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <style name="Theme.MathLab" parent="android:Theme.Material.Light.NoActionBar" />
+
+
+    <style name="Theme.MathLab.Splash" parent="Theme.SplashScreen">
+        <!-- Основная иконка в центре -->
+
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <!-- Фон для светлой темы -->
+
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+
+
+        <item name="android:gradientRadius">30dp</item>
+        <!-- Один и тот же фон для любой темы -->
+        <item name="windowSplashScreenBackground">@color/colorBackItem</item>
+        <item name="android:forceDarkAllowed" tools:targetApi="29">false</item> <!-- ВАЖНО! -->
+
+
+        <item name="postSplashScreenTheme">@style/Theme.MathLab</item>
+
+    </style>
+
+
 </resources>
