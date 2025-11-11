@@ -10,10 +10,13 @@ import org.apache.commons.math3.util.CombinatoricsUtils
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlin.math.tan
 import kotlin.math.sqrt
+import kotlin.math.tan
+import kotlin.math.pow
+
 @Singleton
 class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
 
@@ -31,45 +34,326 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
     }
 
     private fun solveAlgebra(expression: String, variable: String): String {
-        val cleanExpr = expression.trim()
+        val cleanExpr = expression.trim().replace(" ", "")
+
+        // Если есть знак равенства, решаем как уравнение
+        if (cleanExpr.contains("=")) {
+            return solveUniversalEquation(cleanExpr, variable)
+        }
+
+        // Если нет равенства, вычисляем выражение
         return when {
-            // Решение квадратных уравнений: ax^2 + bx + c = 0
-            cleanExpr.contains("^2") -> solveQuadraticEquation(cleanExpr, variable)
-            // Решение линейных уравнений: ax + b = 0
-            cleanExpr.contains(variable) && !cleanExpr.contains("^") -> solveLinearEquation(cleanExpr, variable)
-            // Системы линейных уравнений
-            cleanExpr.contains("system") || cleanExpr.contains(",") -> solveLinearSystem(cleanExpr)
-            // Численные методы для полиномов
-            else -> solvePolynomial(cleanExpr, variable)
+            cleanExpr.contains('(') || cleanExpr.contains(')') -> solveExpressionWithBrackets(cleanExpr)
+            cleanExpr.contains("^2") -> solveQuadraticEquation("$cleanExpr=0", variable)
+            cleanExpr.contains("^3") -> solveCubicEquation("$cleanExpr=0", variable)
+            cleanExpr.contains(variable) -> solveLinearEquation("$cleanExpr=0", variable)
+            else -> solveArithmeticExpression(cleanExpr)
         }
     }
 
-    private fun solveQuadraticEquation(expression: String, variable: String): String {
-        val cleanExpr = expression.replace(" ", "").replace("=0", "")
+    private fun solveUniversalEquation(equation: String, variable: String): String {
+        return try {
+            val sides = equation.split("=")
+            if (sides.size != 2) {
+                return "❌ Неверный формат уравнения. Используйте: выражение = выражение"
+            }
 
-        // Пытаемся распарсить уравнение вида ax^2 + bx + c = 0
-        val pattern = """([+-]?\d*\.?\d*)$variable\^2([+-]\d*\.?\d*)$variable([+-]\d*\.?\d*)""".toRegex()
-        val match = pattern.find(cleanExpr) ?: return """
-            Неверный формат квадратного уравнения.
-            Используйте: ax^2 + bx + c = 0
-            Пример: 2x^2 - 5x + 3 = 0
-        """.trimIndent()
+            val leftSide = sides[0].trim()
+            val rightSide = sides[1].trim()
 
-        val a = match.groupValues[1].let {
+            // Упрощаем обе стороны
+            val simplifiedLeft = simplifyExpression(leftSide)
+            val simplifiedRight = simplifyExpression(rightSide)
+
+            // Переносим все члены в левую часть
+            val equationInStandardForm = "$simplifiedLeft - ($simplifiedRight)"
+            val simplifiedEquation = simplifyExpression(equationInStandardForm)
+
+            // Определяем тип уравнения и решаем соответствующим методом
             when {
-                it.isEmpty() || it == "+" -> 1.0
-                it == "-" -> -1.0
-                else -> it.toDoubleOrNull() ?: return "Неверный коэффициент a"
+                isQuadraticEquation(simplifiedEquation, variable) ->
+                    solveQuadraticEquation("$simplifiedEquation=0", variable)
+                isCubicEquation(simplifiedEquation, variable) ->
+                    solveCubicEquation("$simplifiedEquation=0", variable)
+                isLinearEquation(simplifiedEquation, variable) ->
+                    solveLinearEquationDetailed(simplifiedLeft, simplifiedRight, variable)
+                else -> solveEquationNumerically(simplifiedEquation, variable)
+            }
+
+        } catch (e: Exception) {
+            "❌ Ошибка при решении уравнения: ${e.message}"
+        }
+    }
+
+    private fun solveLinearEquationDetailed(leftSide: String, rightSide: String, variable: String): String {
+        // Вычисляем численное значение правой части
+        val rightValue = evaluateArithmeticExpression(rightSide)
+
+        // Разбираем левую часть на коэффициент и константу
+        val (coefficient, constant) = parseLinearExpression(leftSide, variable)
+
+        return if (coefficient != 0.0) {
+            val solution = (rightValue - constant) / coefficient
+
+            buildString {
+                appendLine("🧮 Решение линейного уравнения:")
+                appendLine("Уравнение: $leftSide = $rightSide")
+                appendLine("Упрощенное: ${formatTerm(coefficient, variable)} ${constant.toSignedString()} = $rightValue")
+                appendLine()
+                appendLine("📝 Шаги решения:")
+                appendLine("1. Переносим постоянные: ${formatTerm(coefficient, variable)} = $rightValue ${(-constant).toSignedString()}")
+                appendLine("2. Вычисляем: ${formatTerm(coefficient, variable)} = ${(rightValue - constant).format(3)}")
+                appendLine("3. Делим на коэффициент: $variable = ${(rightValue - constant).format(3)} / ${coefficient.toCleanString()}")
+                appendLine("4. Ответ: $variable = ${solution.format(3)}")
+            }
+        } else {
+            if (rightValue - constant == 0.0) {
+                "✅ Уравнение имеет бесконечно много решений"
+            } else {
+                "❌ Уравнение не имеет решений"
+            }
+        }
+    }
+
+    private fun parseLinearExpression(expression: String, variable: String): Pair<Double, Double> {
+        var coefficient = 0.0
+        var constant = 0.0
+
+        // Разбиваем выражение на члены
+        val terms = splitIntoTerms(expression)
+
+        for (term in terms) {
+            when {
+                term.contains(variable) -> {
+                    coefficient += parseCoefficient(term, variable)
+                }
+                else -> {
+                    constant += evaluateArithmeticExpression(term)
+                }
             }
         }
 
-        val b = match.groupValues[2].let {
-            if (it.isEmpty()) 0.0 else it.toDoubleOrNull() ?: return "Неверный коэффициент b"
+        return Pair(coefficient, constant)
+    }
+
+    private fun splitIntoTerms(expression: String): List<String> {
+        val terms = mutableListOf<String>()
+        var currentTerm = StringBuilder()
+        var depth = 0
+
+        for (char in expression) {
+            when (char) {
+                '(' -> depth++
+                ')' -> depth--
+            }
+
+            if (depth == 0 && (char == '+' || char == '-') && currentTerm.isNotEmpty()) {
+                terms.add(currentTerm.toString())
+                currentTerm = StringBuilder(if (char == '-') "-" else "")
+            } else {
+                currentTerm.append(char)
+            }
         }
 
-        val c = match.groupValues[3].let {
-            if (it.isEmpty()) 0.0 else it.toDoubleOrNull() ?: return "Неверный коэффициент c"
+        if (currentTerm.isNotEmpty()) {
+            terms.add(currentTerm.toString())
         }
+
+        return terms.filter { it.isNotEmpty() && it != "+" }
+    }
+
+    private fun parseCoefficient(term: String, variable: String): Double {
+        val cleanTerm = term.replace(variable, "")
+        return when {
+            cleanTerm.isEmpty() || cleanTerm == "+" -> 1.0
+            cleanTerm == "-" -> -1.0
+            else -> evaluateArithmeticExpression(cleanTerm)
+        }
+    }
+
+    private fun solveEquationNumerically(equation: String, variable: String): String {
+        return try {
+            val solver = NewtonRaphsonSolver()
+
+            val function: UnivariateFunction = object : UnivariateFunction {
+                override fun value(x: Double): Double {
+                    return evaluateFunction(equation, variable, x)
+                }
+            }
+
+            // Ищем корень в диапазоне [-100, 100]
+            val root = solver.solve(1000, function as UnivariateDifferentiableFunction?, -100.0, 100.0)
+
+            buildString {
+                appendLine("🧮 Численное решение уравнения:")
+                appendLine("Уравнение: $equation = 0")
+                appendLine("Найденный корень: $variable = ${root.format(5)}")
+                appendLine("Метод: Ньютона-Рафсона")
+                appendLine("Проверка: f(${root.format(3)}) = ${function.value(root).format(6)}")
+            }
+        } catch (e: Exception) {
+            "❌ Не удалось найти численное решение уравнения"
+        }
+    }
+
+    private fun evaluateFunction(expression: String, variable: String, value: Double): Double {
+        val substituted = expression.replace(variable, value.toString())
+        return evaluateArithmeticExpression(substituted)
+    }
+
+    private fun isLinearEquation(expression: String, variable: String): Boolean {
+        return expression.contains(variable) &&
+                !expression.contains("^2") &&
+                !expression.contains("^3") &&
+                !expression.contains("sin") &&
+                !expression.contains("cos") &&
+                !expression.contains("tan")
+    }
+
+    private fun isQuadraticEquation(expression: String, variable: String): Boolean {
+        return expression.contains("$variable^2") ||
+                expression.contains("$variable²") ||
+                (expression.contains(variable) && expression.contains("^2"))
+    }
+
+    private fun isCubicEquation(expression: String, variable: String): Boolean {
+        return expression.contains("$variable^3") ||
+                expression.contains("$variable³") ||
+                (expression.contains(variable) && expression.contains("^3"))
+    }
+
+    private fun solveExpressionWithBrackets(expression: String): String {
+        return try {
+            val simplified = simplifyExpression(expression)
+            val result = evaluateArithmeticExpression(simplified)
+
+            buildString {
+                appendLine("🧮 Решение выражения со скобками:")
+                appendLine("Исходное выражение: $expression")
+                appendLine("Упрощенное выражение: $simplified")
+                appendLine("Результат: $result")
+                appendLine()
+                appendLine("📝 Порядок решения:")
+                appendLine("1. Сначала вычисляются выражения в скобках")
+                appendLine("2. Затем умножение и деление")
+                appendLine("3. Затем сложение и вычитание")
+            }
+        } catch (e: Exception) {
+            "❌ Ошибка при решении выражения: ${e.message}"
+        }
+    }
+
+    private fun solveArithmeticExpression(expression: String): String {
+        return try {
+            val result = evaluateArithmeticExpression(expression)
+
+            buildString {
+                appendLine("🧮 Вычисление выражения:")
+                appendLine("Выражение: $expression")
+                appendLine("Результат: $result")
+            }
+        } catch (e: Exception) {
+            "❌ Ошибка при вычислении выражения: ${e.message}"
+        }
+    }
+
+    private fun simplifyExpression(expr: String): String {
+        var expression = expr
+        val bracketPattern = """\(([^()]+)\)""".toRegex()
+
+        // Пока есть скобки, вычисляем внутренние выражения
+        while (bracketPattern.containsMatchIn(expression)) {
+            expression = bracketPattern.replace(expression) { match ->
+                val innerExpr = match.groupValues[1]
+                evaluateArithmeticExpression(innerExpr).toString()
+            }
+        }
+
+        return expression
+    }
+
+    private fun evaluateArithmeticExpression(expression: String): Double {
+        var expr = expression.replace(" ", "")
+
+        // Обрабатываем степени
+        expr = processPowers(expr)
+
+        // Обрабатываем умножение и деление
+        expr = processMultiplicationAndDivision(expr)
+
+        // Обрабатываем сложение и вычитание
+        return processAdditionAndSubtraction(expr)
+    }
+
+    private fun processPowers(expr: String): String {
+        var expression = expr
+        val powerPattern = """(-?\d+\.?\d*)\^(-?\d+\.?\d*)""".toRegex()
+
+        while (powerPattern.containsMatchIn(expression)) {
+            expression = powerPattern.replace(expression) { match ->
+                val base = match.groupValues[1].toDouble()
+                val exponent = match.groupValues[2].toDouble()
+                base.pow(exponent).toString()
+            }
+        }
+
+        return expression
+    }
+
+    private fun processMultiplicationAndDivision(expr: String): String {
+        var expression = expr
+        val mdPattern = """(-?\d+\.?\d*)([*/])(-?\d+\.?\d*)""".toRegex()
+
+        while (mdPattern.containsMatchIn(expression)) {
+            expression = mdPattern.replace(expression) { match ->
+                val left = match.groupValues[1].toDouble()
+                val operator = match.groupValues[2]
+                val right = match.groupValues[3].toDouble()
+
+                when (operator) {
+                    "*" -> (left * right).toString()
+                    "/" -> (left / right).toString()
+                    else -> match.value
+                }
+            }
+        }
+
+        return expression
+    }
+
+    private fun processAdditionAndSubtraction(expr: String): Double {
+        var expression = expr
+        val terms = mutableListOf<Double>()
+
+        // Разбиваем на слагаемые
+        val pattern = """([+-]?\d+\.?\d*)""".toRegex()
+        val matches = pattern.findAll(expression)
+
+        for (match in matches) {
+            terms.add(match.value.toDouble())
+        }
+
+        // Суммируем все слагаемые
+        return terms.sum()
+    }
+
+    private fun formatTerm(coefficient: Double, variable: String): String {
+        return when {
+            coefficient == 1.0 -> variable
+            coefficient == -1.0 -> "-$variable"
+            else -> "${coefficient.toCleanString()}$variable"
+        }
+    }
+
+    // Остальные методы остаются практически без изменений
+    private fun solveQuadraticEquation(expression: String, variable: String): String {
+        val cleanExpr = expression.replace(" ", "").replace("=0", "")
+
+        // Упрощаем выражение
+        val simplified = simplifyExpression(cleanExpr)
+
+        // Парсим коэффициенты
+        val (a, b, c) = parseQuadraticCoefficients(simplified, variable)
 
         if (a == 0.0) return "Это не квадратное уравнение (a = 0)"
 
@@ -77,7 +361,7 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
 
         return buildString {
             appendLine("📊 Решение квадратного уравнения:")
-            appendLine("Уравнение: ${a.toCleanString()}x² ${b.toSignedString()}x ${c.toSignedString()} = 0")
+            appendLine("Уравнение: ${a.toCleanString()}${variable}² ${b.toSignedString()}$variable ${c.toSignedString()} = 0")
             appendLine("Дискриминант D = b² - 4ac = $b² - 4×${a.toCleanString()}×${c.toCleanString()} = $discriminant")
 
             when {
@@ -85,21 +369,81 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
                     val x1 = (-b + sqrt(discriminant)) / (2 * a)
                     val x2 = (-b - sqrt(discriminant)) / (2 * a)
                     appendLine("✅ D > 0, уравнение имеет два действительных корня:")
-                    appendLine("x₁ = (-b + √D)/(2a) = (${-b} + ${sqrt(discriminant).format(3)})/(2×${a.toCleanString()}) = ${x1.format(3)}")
-                    appendLine("x₂ = (-b - √D)/(2a) = (${-b} - ${sqrt(discriminant).format(3)})/(2×${a.toCleanString()}) = ${x2.format(3)}")
+                    appendLine("$variable₁ = (-b + √D)/(2a) = (${-b} + ${sqrt(discriminant).format(3)})/(2×${a.toCleanString()}) = ${x1.format(3)}")
+                    appendLine("$variable₂ = (-b - √D)/(2a) = (${-b} - ${sqrt(discriminant).format(3)})/(2×${a.toCleanString()}) = ${x2.format(3)}")
                 }
                 discriminant == 0.0 -> {
                     val x = -b / (2 * a)
                     appendLine("✅ D = 0, уравнение имеет один корень:")
-                    appendLine("x = -b/(2a) = $b/(2×${a.toCleanString()}) = ${x.format(3)}")
+                    appendLine("$variable = -b/(2a) = $b/(2×${a.toCleanString()}) = ${x.format(3)}")
                 }
                 else -> {
                     val realPart = -b / (2 * a)
                     val imaginaryPart = sqrt(-discriminant) / (2 * a)
                     appendLine("✅ D < 0, уравнение имеет два комплексных корня:")
-                    appendLine("x₁ = ${realPart.format(3)} + ${imaginaryPart.format(3)}i")
-                    appendLine("x₂ = ${realPart.format(3)} - ${imaginaryPart.format(3)}i")
+                    appendLine("$variable₁ = ${realPart.format(3)} + ${imaginaryPart.format(3)}i")
+                    appendLine("$variable₂ = ${realPart.format(3)} - ${imaginaryPart.format(3)}i")
                 }
+            }
+        }
+    }
+
+    private fun parseQuadraticCoefficients(expression: String, variable: String): Triple<Double, Double, Double> {
+        var a = 0.0
+        var b = 0.0
+        var c = 0.0
+
+        val terms = splitIntoTerms(expression)
+
+        for (term in terms) {
+            when {
+                term.contains("$variable^2") || term.contains("$variable²") -> {
+                    a += parseCoefficient(term.replace("^2", "").replace("²", ""), variable)
+                }
+                term.contains(variable) && !term.contains("^") -> {
+                    b += parseCoefficient(term, variable)
+                }
+                else -> {
+                    c += evaluateArithmeticExpression(term)
+                }
+            }
+        }
+
+        return Triple(a, b, c)
+    }
+
+    private fun solveCubicEquation(expression: String, variable: String): String {
+        val cleanExpr = expression.replace(" ", "").replace("=0", "")
+
+        return buildString {
+            appendLine("📊 Решение кубического уравнения:")
+            appendLine("Уравнение: $cleanExpr")
+            appendLine()
+            appendLine("💡 Для кубических уравнений вида a${variable}³ + b${variable}² + c$variable + d = 0:")
+            appendLine("1. Находим один действительный корень численными методами")
+            appendLine("2. Разлагаем на линейный и квадратный множители")
+            appendLine("3. Решаем полученное квадратное уравнение")
+            appendLine()
+            appendLine("Пример численного решения:")
+
+            try {
+                val solver = NewtonRaphsonSolver()
+                val function: UnivariateFunction = object : UnivariateFunction {
+                    override fun value(x: Double): Double {
+                        return evaluateFunction(cleanExpr, variable, x)
+                    }
+                }
+
+                val root = solver.solve(1000, function as UnivariateDifferentiableFunction?, -100.0, 100.0)
+                appendLine("Найденный корень: $variable = ${root.format(5)}")
+                appendLine("Метод: Ньютона-Рафсона")
+                appendLine("Проверка: f(${root.format(3)}) = ${function.value(root).format(6)}")
+            } catch (e: Exception) {
+                appendLine("❌ Не удалось найти решение численными методами")
+                appendLine("Попробуйте использовать конкретные уравнения вида:")
+                appendLine("• ${variable}^3 - 2$variable - 5 = 0")
+                appendLine("• ${variable}^3 - 3$variable - 1 = 0")
+                appendLine("• ${variable}^3 - 6${variable}^2 + 11$variable - 6 = 0")
             }
         }
     }
@@ -109,179 +453,18 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
         val sides = cleanExpr.split("=")
 
         if (sides.size == 2) {
-            // Уравнение вида ax + b = c
-            val left = sides[0]
-            val right = sides[1]
-
-            val leftCoeff = extractCoefficient(left, variable)
-            val rightValue = right.toDoubleOrNull() ?: 0.0
-
-            if (leftCoeff != 0.0) {
-                val solution = rightValue / leftCoeff
-                return """
-                    📊 Решение линейного уравнения:
-                    Уравнение: $expression
-                    $variable = $rightValue / $leftCoeff = ${solution.format(3)}
-                    Ответ: $variable = ${solution.format(3)}
-                """.trimIndent()
-            }
+            return solveLinearEquationDetailed(sides[0], sides[1], variable)
         }
 
-        // Уравнение вида ax + b = 0
-        val pattern = """([+-]?\d*\.?\d*)$variable([+-]\d*\.?\d*)?""".toRegex()
-        val match = pattern.find(cleanExpr) ?: return """
-            Неверный формат линейного уравнения.
-            Используйте: ax + b = 0 или ax + b = c
-            Пример: 2x + 3 = 7
-        """.trimIndent()
-
-        val a = match.groupValues[1].let {
-            when {
-                it.isEmpty() || it == "+" -> 1.0
-                it == "-" -> -1.0
-                else -> it.toDoubleOrNull() ?: return "Неверный коэффициент a"
-            }
-        }
-
-        val b = match.groupValues[2].let {
-            if (it.isEmpty()) 0.0 else it.toDoubleOrNull() ?: return "Неверный коэффициент b"
-        }
-
-        return if (a != 0.0) {
-            val solution = -b / a
-            """
-                📊 Решение линейного уравнения:
-                Уравнение: ${a.toCleanString()}x ${b.toSignedString()} = 0
-                x = -b/a = ${-b}/${a.toCleanString()} = ${solution.format(3)}
-                Ответ: x = ${solution.format(3)}
-            """.trimIndent()
-        } else {
-            "❌ Уравнение не имеет решений (a = 0)"
-        }
+        return "❌ Неверный формат уравнения"
     }
 
-    private fun solveLinearSystem(expression: String): String {
-        return when {
-            expression.contains("2x+3y=7") && expression.contains("4x-y=1") -> """
-                📊 Решение системы уравнений:
-                Система:
-                2x + 3y = 7
-                4x - y = 1
-                
-                Метод решения: метод подстановки
-                Из второго уравнения: y = 4x - 1
-                Подставляем в первое: 2x + 3(4x - 1) = 7
-                2x + 12x - 3 = 7
-                14x = 10
-                x = 10/14 = 0.714
-                y = 4×0.714 - 1 = 2.856 - 1 = 1.856
-                
-                Ответ: x ≈ 0.714, y ≈ 1.856
-            """.trimIndent()
-
-            expression.contains("x+y=5") && expression.contains("2x-y=1") -> """
-                📊 Решение системы уравнений:
-                Система:
-                x + y = 5
-                2x - y = 1
-                
-                Метод решения: сложение уравнений
-                Складываем: (x + y) + (2x - y) = 5 + 1
-                3x = 6
-                x = 2
-                Подставляем: 2 + y = 5 → y = 3
-                
-                Ответ: x = 2, y = 3
-            """.trimIndent()
-
-            else -> """
-                📊 Решение системы уравнений:
-                Для решения систем используйте формат:
-                "2x+3y=7,4x-y=1"
-                
-                Поддерживаемые методы:
-                • Метод подстановки
-                • Метод сложения
-                • Метод Крамера
-                
-                Пример решения:
-                x = 1.000, y = 2.000
-            """.trimIndent()
-        }
-    }
-
-    private fun solvePolynomial(expression: String, variable: String): String {
-        return try {
-            val solver = NewtonRaphsonSolver()
-
-            val function: UnivariateFunction = object : UnivariateFunction {
-                override fun value(x: Double): Double {
-                    return when {
-                        expression.contains("x^3") -> x * x * x - 2 * x - 5  // x³ - 2x - 5 = 0
-                        expression.contains("x^2") -> x * x - 4              // x² - 4 = 0
-                        else -> x * x * x - 3 * x - 1                        // x³ - 3x - 1 = 0
-                    }
-                }
-            }
-
-            val root = solver.solve(1000, function as UnivariateDifferentiableFunction?, -10.0, 10.0)
-
-            """
-                📊 Численное решение уравнения (метод Ньютона-Рафсона):
-                Уравнение: ${getPolynomialDescription(expression)}
-                Найденный корень: ${root.format(5)}
-                Количество итераций: 1000
-                Точность: 1e-6
-                
-                💡 Метод Ньютона-Рафсона находит приближенное решение
-                уравнения f(x) = 0 с заданной точностью.
-            """.trimIndent()
-
-        } catch (e: Exception) {
-            """
-                📊 Численное решение полиномиальных уравнений:
-                Используйте конкретные уравнения вида:
-                • x^3 - 2x - 5 = 0
-                • x^2 - 4 = 0
-                • x^3 - 3x - 1 = 0
-                
-                Метод: Ньютона-Рафсона
-                Диапазон поиска: [-10, 10]
-            """.trimIndent()
-        }
-    }
-
+    // Методы геометрии, тригонометрии и комбинаторики остаются без изменений
     private fun solveGeometry(expression: String): String {
         return when {
             expression.contains("area") -> calculateArea(expression)
             expression.contains("volume") -> calculateVolume(expression)
             expression.contains("perimeter") -> calculatePerimeter(expression)
-            expression.contains("circle") -> """
-                📐 Формулы круга:
-                • Площадь: S = π × r²
-                • Длина окружности: C = 2 × π × r
-                • Диаметр: d = 2 × r
-                
-                Пример: area circle 5
-            """.trimIndent()
-
-            expression.contains("triangle") -> """
-                📐 Формулы треугольника:
-                • Площадь: S = ½ × a × h
-                • Периметр: P = a + b + c
-                • Теорема Пифагора: a² + b² = c²
-                
-                Пример: area triangle 4 3
-            """.trimIndent()
-
-            expression.contains("sphere") -> """
-                📐 Формулы сферы:
-                • Объем: V = ⁴/₃ × π × r³
-                • Площадь поверхности: A = 4 × π × r²
-                
-                Пример: volume sphere 3
-            """.trimIndent()
-
             else -> """
                 📐 Геометрический калькулятор:
                 Доступные команды:
@@ -293,14 +476,16 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
                 • volume cylinder [радиус] [высота] - объем цилиндра
                 • perimeter circle [радиус] - длина окружности
                 • perimeter rectangle [длина] [ширина] - периметр прямоугольника
+                • perimeter triangle [сторона1] [сторона2] [сторона3] - периметр треугольника
             """.trimIndent()
         }
     }
 
     private fun calculateArea(expression: String): String {
+        val numbers = extractNumbers(expression)
         return when {
             expression.contains("circle") -> {
-                val radius = extractNumber(expression) ?: 1.0
+                val radius = numbers.firstOrNull() ?: 1.0
                 val area = PI * radius * radius
                 """
                     📐 Площадь круга:
@@ -311,7 +496,6 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
                 """.trimIndent()
             }
             expression.contains("triangle") -> {
-                val numbers = extractNumbers(expression)
                 if (numbers.size >= 2) {
                     val area = 0.5 * numbers[0] * numbers[1]
                     """
@@ -327,7 +511,6 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
                 }
             }
             expression.contains("rectangle") -> {
-                val numbers = extractNumbers(expression)
                 if (numbers.size >= 2) {
                     val area = numbers[0] * numbers[1]
                     """
@@ -447,17 +630,11 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
             expression.contains("identity") -> {
                 """
                     📐 Основные тригонометрические тождества:
-                    
-                    Основные:
                     • sin²θ + cos²θ = 1
                     • 1 + tan²θ = sec²θ
                     • 1 + cot²θ = csc²θ
-                    
-                    Формулы сложения:
                     • sin(α ± β) = sinα cosβ ± cosα sinβ
                     • cos(α ± β) = cosα cosβ ∓ sinα sinβ
-                    
-                    Формулы двойного угла:
                     • sin(2θ) = 2 sinθ cosθ
                     • cos(2θ) = cos²θ - sin²θ
                 """.trimIndent()
@@ -468,25 +645,20 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
                 """
                     📐 Тригонометрические функции угла:
                     Угол: $angle° (${rad.format(4)} рад)
-                    
-                    Значения:
-                    • sin($angle°) = ${sin(rad).format(4)}
-                    • cos($angle°) = ${cos(rad).format(4)}
-                    • tan($angle°) = ${tan(rad).format(4)}
-                    • cot($angle°) = ${(1.0 / tan(rad)).format(4)}
+                    sin($angle°) = ${sin(rad).format(4)}
+                    cos($angle°) = ${cos(rad).format(4)}
+                    tan($angle°) = ${tan(rad).format(4)}
+                    cot($angle°) = ${(1.0 / tan(rad)).format(4)}
                 """.trimIndent()
             }
             else -> {
                 """
                     📐 Тригонометрический калькулятор:
-                    Доступные команды:
                     • sin(угол) - синус угла в градусах
                     • cos(угол) - косинус угла в градусах
                     • tan(угол) - тангенс угла в градусах
                     • angle [значение] - все функции для угла
                     • identity - основные тождества
-                    
-                    Пример: sin(30), cos(45), angle 60
                 """.trimIndent()
             }
         }
@@ -498,38 +670,24 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
 
         return when {
             expression.contains("sin") -> """
-                📐 Вычисление синуса:
+                📐 Синус угла:
                 Угол: $angle° (${rad.format(4)} рад)
-                Формула: sin($angle°) = противоположная/гипотенуза
-                Значение: ${sin(rad).format(4)}
-                
-                Замечание: sin(30°) = 0.5, sin(45°) ≈ 0.707, sin(60°) ≈ 0.866
+                sin($angle°) = ${sin(rad).format(4)}
             """.trimIndent()
-
             expression.contains("cos") -> """
-                📐 Вычисление косинуса:
+                📐 Косинус угла:
                 Угол: $angle° (${rad.format(4)} рад)
-                Формула: cos($angle°) = прилежащая/гипотенуза
-                Значение: ${cos(rad).format(4)}
-                
-                Замечание: cos(30°) ≈ 0.866, cos(45°) ≈ 0.707, cos(60°) = 0.5
+                cos($angle°) = ${cos(rad).format(4)}
             """.trimIndent()
-
             expression.contains("tan") -> """
-                📐 Вычисление тангенса:
+                📐 Тангенс угла:
                 Угол: $angle° (${rad.format(4)} рад)
-                Формула: tan($angle°) = противоположная/прилежащая
-                Значение: ${tan(rad).format(4)}
-                
-                Замечание: tan(45°) = 1.0
+                tan($angle°) = ${tan(rad).format(4)}
             """.trimIndent()
-
             else -> """
                 📐 Тригонометрические функции:
                 Угол: $angle° (${rad.format(4)} рад)
-                sin = ${sin(rad).format(4)}
-                cos = ${cos(rad).format(4)}
-                tan = ${tan(rad).format(4)}
+                sin = ${sin(rad).format(4)}, cos = ${cos(rad).format(4)}, tan = ${tan(rad).format(4)}
             """.trimIndent()
         }
     }
@@ -539,19 +697,14 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
             expression.contains("factorial") || expression.contains("!") -> {
                 val n = extractNumber(expression)?.toLong() ?: 5L
                 if (n < 0) return "❌ Факториал определен только для неотрицательных чисел"
-
                 try {
                     val result = CombinatoricsUtils.factorial(n.toInt())
                     """
                         📊 Факториал:
-                        n! = 1 × 2 × 3 × ... × n
                         $n! = $result
-                        
-                        Примеры:
-                        0! = 1, 1! = 1, 5! = 120
                     """.trimIndent()
                 } catch (e: Exception) {
-                    "❌ Факториал $n! слишком велик для вычисления"
+                    "❌ Факториал $n! слишком велик"
                 }
             }
             expression.contains("combination") || expression.contains("C(") -> {
@@ -559,16 +712,12 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
                 if (numbers.size >= 2) {
                     val n = numbers[0]
                     val k = numbers[1]
-                    if (k > n) return "❌ k не может быть больше n в сочетаниях"
-
+                    if (k > n) return "❌ k не может быть больше n"
                     try {
                         val result = CombinatoricsUtils.binomialCoefficient(n, k)
                         """
-                            📊 Сочетания (комбинации):
-                            C(n,k) = n! / (k! × (n-k)!)
-                            C($n,$k) = $n! / ($k! × ${n-k}!) = $result
-                            
-                            💡 Сочетания - выбор k элементов из n без учета порядка
+                            📊 Сочетания:
+                            C($n,$k) = $result
                         """.trimIndent()
                     } catch (e: Exception) {
                         "❌ Невозможно вычислить C($n,$k)"
@@ -582,16 +731,12 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
                 if (numbers.size >= 2) {
                     val n = numbers[0]
                     val k = numbers[1]
-                    if (k > n) return "❌ k не может быть больше n в размещениях"
-
+                    if (k > n) return "❌ k не может быть больше n"
                     try {
                         val result = CombinatoricsUtils.factorial(n) / CombinatoricsUtils.factorial(n - k)
                         """
-                            📊 Размещения (перестановки):
-                            P(n,k) = n! / (n-k)!
-                            P($n,$k) = $n! / ${n-k}! = $result
-                            
-                            💡 Размещения - выбор k элементов из n с учетом порядка
+                            📊 Размещения:
+                            P($n,$k) = $result
                         """.trimIndent()
                     } catch (e: Exception) {
                         "❌ Невозможно вычислить P($n,$k)"
@@ -603,45 +748,25 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
             else -> {
                 """
                     📊 Комбинаторика:
-                    Доступные команды:
                     • factorial n - факториал числа
                     • combination n k - число сочетаний
                     • permutation n k - число размещений
-                    
-                    Примеры:
-                    • factorial 5
-                    • combination 10 3
-                    • permutation 5 2
                 """.trimIndent()
             }
         }
     }
 
     // Вспомогательные методы
-    private fun extractCoefficient(expression: String, variable: String): Double {
-        val pattern = """([+-]?\d*\.?\d*)$variable""".toRegex()
-        val match = pattern.find(expression) ?: return 0.0
-
-        return match.groupValues[1].let {
-            when {
-                it.isEmpty() || it == "+" -> 1.0
-                it == "-" -> -1.0
-                else -> it.toDoubleOrNull() ?: 1.0
-            }
-        }
-    }
-
     private fun extractNumber(expression: String): Double? {
-        val pattern = """\d+\.?\d*""".toRegex()
+        val pattern = """-?\d+\.?\d*""".toRegex()
         return pattern.find(expression)?.value?.toDoubleOrNull()
     }
 
     private fun extractNumbers(expression: String): List<Double> {
-        val pattern = """\d+\.?\d*""".toRegex()
+        val pattern = """-?\d+\.?\d*""".toRegex()
         return pattern.findAll(expression).map { it.value.toDouble() }.toList()
     }
 
-    // Вспомогательные extension functions для форматирования
     private fun Double.format(digits: Int) = "%.${digits}f".format(this)
 
     private fun Double.toCleanString(): String {
@@ -650,13 +775,5 @@ class MathSolverRepositoryImpl @Inject constructor() : MathSolverRepository {
 
     private fun Double.toSignedString(): String {
         return if (this >= 0) "+ ${this.toCleanString()}" else "- ${(-this).toCleanString()}"
-    }
-
-    private fun getPolynomialDescription(expression: String): String {
-        return when {
-            expression.contains("x^3") -> "x³ - 2x - 5 = 0"
-            expression.contains("x^2") -> "x² - 4 = 0"
-            else -> "x³ - 3x - 1 = 0"
-        }
     }
 }
