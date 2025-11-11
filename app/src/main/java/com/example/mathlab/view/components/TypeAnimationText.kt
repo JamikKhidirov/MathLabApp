@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,14 +28,15 @@ fun TypeAnimationText(
     modifier: Modifier,
     letterDelayMillis: Long = 25L
 ){
-    var visibleTextLenght by remember { mutableStateOf(0) }
+    var visibleTextLenght by rememberSaveable { mutableStateOf(0) }
 
     LaunchedEffect(text) {
-        visibleTextLenght = 0
-        for (i in text.indices){
-            delay(letterDelayMillis)
-            visibleTextLenght = i + 1
-
+        // Если анимация уже полностью проиграна, не сбрасываем состояние
+        if (visibleTextLenght < text.length) {
+            for (i in visibleTextLenght until text.length){
+                delay(letterDelayMillis)
+                visibleTextLenght = i + 1
+            }
         }
     }
 

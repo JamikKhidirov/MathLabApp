@@ -11,9 +11,8 @@
         <item name="android:windowNoTitle">true</item>
         <!-- Фон для светлой темы -->
 
+
         <item name="windowSplashScreenAnimationDuration">1000</item>
-
-
         <item name="android:gradientRadius">30dp</item>
         <!-- Один и тот же фон для любой темы -->
         <item name="windowSplashScreenBackground">@color/colorBackItem</item>
