@@ -7,7 +7,7 @@ enum class MathCategory {
     ALGEBRA,
     GEOMETRY,
     TRIGONOMETRY,
-    COMBINATORICS
+    COMBINATORICS,
 }
 
 
