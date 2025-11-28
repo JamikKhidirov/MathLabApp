@@ -5,4 +5,10 @@ import dagger.hilt.android.HiltAndroidApp
 
 
 @HiltAndroidApp
-class MathApp: Application()
+class MathApp: Application(){
+
+    override fun onCreate() {
+        super.onCreate()
+    }
+
+}
