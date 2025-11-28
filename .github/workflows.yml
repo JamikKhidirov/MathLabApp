@@ -1,36 +1,143 @@
-# This is a basic workflow to help you get started with Actions
+name: RuStore Auto Deploy (AAB)
 
-name: CI
-
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+    branches:
+      - main
+  workflow_dispatch: # Запуск вручную
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
+env:
+  # Общие переменные
+  PACKAGE_NAME: com.example.yourapp # ИЗМЕНИТЕ на ваш package name
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
+  build_and_deploy:
     runs-on: ubuntu-latest
 
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: 📥 Проверка репозитория
+        uses: actions/checkout@v4
+        with:
+          # Нужен для пуша изменений (увеличенного versionCode) обратно в main
+          token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      - name: ☕ Настройка Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: 🛠️ Установка утилит (jq для JSON)
+        run: sudo apt-get install jq
+
+      - name: 📝 Увеличение versionCode и коммит
+        id: versioning
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          # Чтение текущего кода версии из version.txt
+          CURRENT_CODE=$(cat version.txt) 
+          NEW_CODE=$((CURRENT_CODE + 1))
+          echo "Предыдущий versionCode: $CURRENT_CODE. Новый: $NEW_CODE"
+          echo $NEW_CODE > version.txt # Перезапись файла новым кодом
+          
+          # Запись нового кода в переменную окружения
+          echo "NEW_CODE=$NEW_CODE" >> $GITHUB_ENV
+          
+          # Коммит и пуш нового versionCode обратно в репозиторий
+          git config user.email "ci-bot@users.noreply.github.com"
+          git config user.name "CI-Bot"
+          git add version.txt
+          git commit -m "chore: Auto bump versionCode to $NEW_CODE [skip ci]" || echo "No changes to commit"
+          git push || echo "No version commit needed"
+
+      - name: 🔐 Настройка Keystore (Декодирование)
+        # Декодирует Keystore из Base64 секрета и сохраняет как файл app/release.jks
+        run: |
+          echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > app/release.jks
+
+      - name: 🔑 Создание файла подписи (signing.properties)
+        # Создаем временный файл свойств для подписи, используя Секреты GitHub
+        run: |
+          echo "storeFile=release.jks" >> app/signing.properties
+          echo "storePassword=${{ secrets.SIGNING_KEYSTORE_PASSWORD }}" >> app/signing.properties
+          echo "keyAlias=${{ secrets.SIGNING_KEY_ALIAS }}" >> app/signing.properties
+          echo "keyPassword=${{ secrets.SIGNING_KEY_PASSWORD }}" >> app/signing.properties
+
+      - name: 📦 Сборка AAB в релизной конфигурации
+        run: ./gradlew :app:bundleRelease
+
+      - name: 🔍 Поиск собранного AAB
+        id: find_aab
+        # AAB файл называется app-release.aab
+        run: |
+          AAB_PATH=$(find app/build/outputs/bundle/release/ -name "app-release.aab" -print -quit)
+          echo "aab_path=$AAB_PATH" >> $GITHUB_OUTPUT
+
+      - name: 🔑 Генерация RuStore API Токена
+        id: get_token
+        run: |
+          TOKEN_RESPONSE=$(curl -s -X POST 'https://public-api.rustore.ru/public/v1/authorize' \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "keyId": "${{ secrets.RUSTORE_KEY_ID }}",
+              "privateKey": "${{ secrets.RUSTORE_PRIVATE_KEY }}"
+            }')
+          TOKEN=$(echo $TOKEN_RESPONSE | jq -r '.body.jwe')
+          # Если токен не получен, скрипт завершится
+          if [ "$TOKEN" == "null" ] || [ -z "$TOKEN" ]; then 
+            echo "Ошибка авторизации. Проверьте RUSTORE_KEY_ID и RUSTORE_PRIVATE_KEY."
+            echo "Ответ API: $TOKEN_RESPONSE"
+            exit 1
+          fi
+          echo "rustore_token=$TOKEN" >> $GITHUB_OUTPUT
+
+      - name: 📝 Создание черновика версии
+        id: create_version
+        run: |
+          # Используем инкрементированный versionCode в качестве versionId
+          VERSION_ID=${{ env.NEW_CODE }}
+          
+          VERSION_RESPONSE=$(curl -s -X POST "https://public-api.rustore.ru/public/v1/application/${{ env.PACKAGE_NAME }}/version" \
+            -H 'Content-Type: application/json' \
+            -H "Public-Token: ${{ steps.get_token.outputs.rustore_token }}" \
+            -d "{
+              \"versionId\": $VERSION_ID,
+              \"publishType\": \"INSTANTLY\", 
+              \"partialValue\": 100 
+            }")
+          
+          # Проверяем на ошибки и извлекаем ID (должен совпадать с NEW_CODE)
+          CODE=$(echo $VERSION_RESPONSE | jq -r '.code')
+          if [ "$CODE" != "OK" ]; then 
+            echo "Ошибка создания черновика. Возможно, versionId $VERSION_ID уже существует."
+            echo "Ответ API: $VERSION_RESPONSE"
+            exit 1
+          fi
+          
+          echo "Создан черновик с ID: $VERSION_ID"
+          echo "version_id=$VERSION_ID" >> $GITHUB_OUTPUT
+
+      - name: 📤 Загрузка AAB файла в RuStore
+        run: |
+          AAB_PATH="${{ steps.find_aab.outputs.aab_path }}"
+          VERSION_ID="${{ steps.create_version.outputs.version_id }}"
+          
+          curl -s -X POST "https://public-api.rustore.ru/public/v1/application/${{ env.PACKAGE_NAME }}/version/$VERSION_ID/aab" \
+            -H "Public-Token: ${{ steps.get_token.outputs.rustore_token }}" \
+            -F "file=@$AAB_PATH"
+
+      - name: ✅ Отправка версии на модерацию
+        run: |
+          VERSION_ID="${{ steps.create_version.outputs.version_id }}"
+          
+          MODERATION_RESPONSE=$(curl -s -X POST "https://public-api.rustore.ru/public/v1/application/${{ env.PACKAGE_NAME }}/version/$VERSION_ID/moderation" \
+            -H 'Content-Type: application/json' \
+            -H "Public-Token: ${{ steps.get_token.outputs.rustore_token }}")
+          
+          CODE=$(echo $MODERATION_RESPONSE | jq -r '.code')
+          if [ "$CODE" != "OK" ]; then 
+            echo "Ошибка при отправке на модерацию. Проверьте, заполнены ли все метаданные в консоли RuStore."
+            echo "Ответ API: $MODERATION_RESPONSE"
+            exit 1
+          fi
+          
+          echo "Версия $VERSION_ID успешно отправлена на модерацию RuStore."
